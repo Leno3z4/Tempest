@@ -89,13 +89,28 @@ class RobinhoodCrypto:
         if not rows: raise RobinhoodAPIError(f"No estimated price for {symbol}")
         return rows[0]
 
-    def order(self, account_number: str, order_id: str) -> dict[str, Any]:
-        return self.request("GET", f"/api/v2/crypto/trading/orders/{order_id}/" + _encode_params({"account_number": account_number}))
+    def place_order(self, *, account_number: str, symbol: str, side: str, order_type: str, order_config: dict[str, str]) -> dict[str, Any]:
+        body = {"symbol": symbol, "client_order_id": str(uuid.uuid4()), "side": side, "type": order_type,
+                f"{order_type}_order_config": order_config}
+        return self.request("POST", "/api/v2/crypto/trading/orders/" + _encode_params({"account_number": account_number}), body)
 
     def place_market_order(self, *, account_number: str, symbol: str, side: str, asset_quantity: float) -> dict[str, Any]:
-        body = {"symbol": symbol, "client_order_id": str(uuid.uuid4()), "side": side, "type": "market",
-                "market_order_config": {"asset_quantity": str(asset_quantity)}}
-        return self.request("POST", "/api/v2/crypto/trading/orders/" + _encode_params({"account_number": account_number}), body)
+        return self.place_order(account_number=account_number,symbol=symbol,side=side,order_type="market",
+                                order_config={"asset_quantity":str(asset_quantity)})
+
+    def place_market_buy_quote(self, *, account_number: str, symbol: str, quote_amount: float) -> dict[str, Any]:
+        return self.place_order(account_number=account_number,symbol=symbol,side="buy",order_type="market",
+                                order_config={"quote_amount":str(quote_amount)})
+
+    def place_stop_loss_sell(self, *, account_number: str, symbol: str, asset_quantity: float, stop_price: float) -> dict[str, Any]:
+        return self.place_order(account_number=account_number,symbol=symbol,side="sell",order_type="stop_loss",
+                                order_config={"asset_quantity":str(asset_quantity),"stop_price":str(stop_price),"time_in_force":"gtc"})
+
+    def cancel_order(self, order_id: str) -> dict[str, Any]:
+        return self.request("POST", f"/api/v2/crypto/trading/orders/{order_id}/cancel/")
+
+    def order(self, account_number: str, order_id: str) -> dict[str, Any]:
+        return self.request("GET", f"/api/v2/crypto/trading/orders/{order_id}/" + _encode_params({"account_number": account_number}))
 
     def wait_for_fill(self, account_number: str, order_id: str, timeout_seconds: float = 15.0) -> dict[str, Any]:
         deadline = time.time() + timeout_seconds
