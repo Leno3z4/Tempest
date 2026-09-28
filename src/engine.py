@@ -90,6 +90,7 @@ class TempestEngine:
             high_water_price=high,
             min_order_amount=float(row.get("min_order_amount") or 0),
             asset_increment=float(row.get("asset_increment") or 0),
+            max_order_size=float(row.get("max_order_size") or 0),
             signal_score=signal_score(
                 rsi_value=rsi_value,
                 momentum_5m=m5,
@@ -159,6 +160,8 @@ class TempestEngine:
         if snapshot.ask <= 0:
             raise RobinhoodAPIError("invalid ask")
         qty = floor_step(order_usd / snapshot.ask, snapshot.asset_increment)
+        if snapshot.max_order_size > 0:
+            qty = floor_step(min(qty, snapshot.max_order_size), snapshot.asset_increment)
         if qty <= 0:
             raise RobinhoodAPIError("quantity rounded to zero")
         est = self.rh.estimated_price(f"{snapshot.symbol}-USD", "ask", qty)
@@ -233,8 +236,19 @@ class TempestEngine:
 
     def _sell_quantity(self, snapshot: MarketSnapshot, position: Position, quantity: float, reason: str, advance_stage: bool = False) -> bool:
         qty = floor_step(min(quantity, snapshot.holding_qty or quantity), snapshot.asset_increment)
+        if snapshot.max_order_size > 0:
+            qty = floor_step(min(qty, snapshot.max_order_size), snapshot.asset_increment)
         if qty <= 0:
             log.info("SELL %s skipped: zero quantity after increment rounding", snapshot.symbol)
+            return False
+        try:
+            estimate = self.rh.estimated_price(f"{snapshot.symbol}-USD", "bid", qty)
+            estimated_credit = float(estimate.get("est_total_credit") or 0)
+            if estimated_credit > 0 and snapshot.min_order_amount > estimated_credit:
+                log.info("SELL %s skipped: estimated credit $%.4f below broker minimum $%.4f", snapshot.symbol, estimated_credit, snapshot.min_order_amount)
+                return False
+        except Exception as exc:
+            log.info("SELL %s preflight skipped: %s", snapshot.symbol, exc)
             return False
         now = datetime.now(timezone.utc)
 
@@ -293,15 +307,19 @@ class TempestEngine:
         stages = self.s.moonshot_stage_multiples
         fractions = self.s.moonshot_stage_fractions
         idx = position.next_stage_index
-        if idx >= len(stages):
-            return False
-        if multiple < stages[idx]:
-            return False
-
-        fraction = fractions[idx]
-        qty = position.quantity if idx == len(stages) - 1 else position.quantity * fraction
-        reason = f"moonshot stage {idx + 1}: {multiple:.2f}x >= {stages[idx]:.2f}x"
-        return self._sell_quantity(snapshot, position, qty, reason, advance_stage=True)
+        changed = False
+        while idx < len(stages) and multiple >= stages[idx]:
+            current = next((p for p in self.store.positions() if p.symbol == snapshot.symbol), None)
+            if current is None:
+                break
+            fraction = fractions[idx]
+            qty = current.quantity if idx == len(stages) - 1 else current.quantity * fraction
+            reason = f"moonshot stage {idx + 1}: {multiple:.2f}x >= {stages[idx]:.2f}x"
+            if not self._sell_quantity(snapshot, current, qty, reason, advance_stage=True):
+                break
+            changed = True
+            idx += 1
+        return changed
 
     def _manage_position(self, snapshot: MarketSnapshot, position: Position) -> bool:
         if position.moonshot and self._manage_moonshot(snapshot, position):
