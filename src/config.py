@@ -50,6 +50,16 @@ class Settings:
     trailing_stop_pct: float = field(default_factory=lambda: _float("TRAILING_STOP_PCT", 5.0))
     max_hold_minutes: int = field(default_factory=lambda: _int("MAX_HOLD_MINUTES", 180))
 
+    moonshot_enabled: bool = field(default_factory=lambda: _bool("MOONSHOT_ENABLED", True))
+    moonshot_min_score: float = field(default_factory=lambda: _float("MOONSHOT_MIN_SCORE", 0.72))
+    moonshot_min_ai_score: float = field(default_factory=lambda: _float("MOONSHOT_MIN_AI_SCORE", 0.72))
+    moonshot_target_multiple: float = field(default_factory=lambda: _float("MOONSHOT_TARGET_MULTIPLE", 100.0))
+    moonshot_stop_loss_pct: float = field(default_factory=lambda: _float("MOONSHOT_STOP_LOSS_PCT", 15.0))
+    moonshot_trailing_stop_pct: float = field(default_factory=lambda: _float("MOONSHOT_TRAILING_STOP_PCT", 15.0))
+    moonshot_max_hold_minutes: int = field(default_factory=lambda: _int("MOONSHOT_MAX_HOLD_MINUTES", 10080))
+    moonshot_stage_multiples: tuple[float, ...] = field(default_factory=lambda: tuple(float(x) for x in os.getenv("MOONSHOT_STAGE_MULTIPLES","2,5,10,25,100").split(",") if x.strip()))
+    moonshot_stage_fractions: tuple[float, ...] = field(default_factory=lambda: tuple(float(x) for x in os.getenv("MOONSHOT_STAGE_FRACTIONS","0.20,0.15,0.15,0.10,0.40").split(",") if x.strip()))
+
     def validate(self) -> None:
         if self.live_trading and self.live_confirmation != "I_UNDERSTAND":
             raise ValueError("Live trading requires LIVE_TRADING=1 and LIVE_TRADING_CONFIRM=I_UNDERSTAND")
@@ -67,3 +77,11 @@ class Settings:
             raise ValueError("MAX_OPEN_POSITIONS must be >= 1")
         if not self.meme_symbols:
             raise ValueError("MEME_SYMBOLS cannot be empty")
+        if not self.moonshot_stage_multiples or len(self.moonshot_stage_multiples) != len(self.moonshot_stage_fractions):
+            raise ValueError("Moonshot stage multiples/fractions must have equal non-zero lengths")
+        if any(m <= 1 for m in self.moonshot_stage_multiples):
+            raise ValueError("Moonshot stage multiples must be > 1")
+        if abs(sum(self.moonshot_stage_fractions) - 1.0) > 1e-6:
+            raise ValueError("Moonshot stage fractions must sum to 1.0")
+        if self.moonshot_target_multiple < max(self.moonshot_stage_multiples):
+            raise ValueError("MOONSHOT_TARGET_MULTIPLE must reach the final stage")
