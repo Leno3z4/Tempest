@@ -25,6 +25,7 @@ class MarketSnapshot(BaseModel):
     high_water_price: float | None = None
     min_order_amount: float = 0.0
     asset_increment: float = 0.0
+    max_order_size: float = 0.0
     signal_score: float = 0.0
     moonshot_score: float = 0.0
 
