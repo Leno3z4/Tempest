@@ -55,7 +55,7 @@ class TempestEngine:
             momentum_5m_pct=pct_change(prices[-16],mid) if len(prices)>=16 else None,
             volatility_5m_pct=volatility_pct(prices[-16:]) if len(prices)>=16 else None,
             samples=len(prices),holding_qty=holdings.get(symbol,0),entry_price=pos.entry_price if pos else None,
-            unrealized_pnl_pct=pnl,high_water_price=high,min_order_amount=float(row.get("min_order_amount") or 0),
+            unrealized_pnl_pct=pnl,high_water_price=high,min_order_amount=float(row.get("min_order_amount") or row.get("min_order_size") or 0),
             asset_increment=float(row.get("asset_increment") or 0),
             signal_score=signal_score(rsi_value=rsi(prices),momentum_5m=pct_change(prices[-16],mid) if len(prices)>=16 else None,
                                       volatility_5m=volatility_pct(prices[-16:]) if len(prices)>=16 else None,
@@ -67,7 +67,8 @@ class TempestEngine:
         open_symbols={p.symbol for p in self.store.positions()}
         candidates=[s for s in snapshots if s.signal_score>=self.s.min_signal_score or s.symbol in open_symbols]
         candidates.sort(key=lambda s:(s.symbol in open_symbols,s.signal_score,s.momentum_5m_pct or -999),reverse=True)
-        try: result=self.ai.analyze({"mode":self.mode,"constraints":self.s.__dict__,"candidates":[s.model_dump(mode="json") for s in candidates[:self.s.max_candidates]]})
+        constraints={"max_order_usd":self.s.max_order_usd,"max_position_usd":self.s.max_position_usd,"max_daily_spend_usd":self.s.max_daily_spend_usd,"max_open_positions":self.s.max_open_positions,"stop_loss_pct":self.s.stop_loss_pct,"take_profit_pct":self.s.take_profit_pct,"trailing_stop_pct":self.s.trailing_stop_pct,"max_hold_minutes":self.s.max_hold_minutes}
+        try: result=self.ai.analyze({"mode":self.mode,"constraints":constraints,"candidates":[s.model_dump(mode="json") for s in candidates[:self.s.max_candidates]]})
         except Exception:
             log.exception("Gemini analysis failed; no new entries")
             self.last_ai_run=now; return
