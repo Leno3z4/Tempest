@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Action = Literal["BUY", "HOLD", "SELL"]
+TradeStyle = Literal["NORMAL", "MOONSHOT"]
 
 class MarketSnapshot(BaseModel):
     symbol: str
@@ -25,16 +26,20 @@ class MarketSnapshot(BaseModel):
     min_order_amount: float = 0.0
     asset_increment: float = 0.0
     signal_score: float = 0.0
+    moonshot_score: float = 0.0
 
 class AIDecision(BaseModel):
     symbol: str
     action: Action
+    trade_style: TradeStyle = "NORMAL"
     confidence: float = Field(ge=0.0, le=1.0)
+    moonshot_score: float = Field(default=0.0, ge=0.0, le=1.0)
     suggested_quote_usd: float = Field(default=0.0, ge=0.0)
     thesis: str = Field(min_length=1, max_length=1200)
     risk_flags: list[str] = Field(default_factory=list, max_length=12)
     catalysts: list[str] = Field(default_factory=list, max_length=12)
     invalidation: str = Field(default="", max_length=600)
+    upside_case_multiple: float = Field(default=1.0, ge=1.0, le=1000.0)
 
 class AIBatchDecision(BaseModel):
     decisions: list[AIDecision] = Field(default_factory=list, max_length=20)
@@ -45,3 +50,5 @@ class Position(BaseModel):
     entry_price: float
     entry_time: datetime
     high_water_price: float
+    moonshot: bool = False
+    next_stage_index: int = 0
