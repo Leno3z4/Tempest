@@ -83,6 +83,24 @@ Live mode is intentionally off until you explicitly enable both live settings.
 8. Monitors every open position continuously for hard exits and AI exits.
 9. Records decisions, fills, and realized P&L for post-trade analysis.
 
+## Moonshot / 100× handling
+
+“100×” is implemented as an **upside scenario target**, not as a prediction and not as leverage. Tempest first requires both the deterministic moonshot score and Gemini's moonshot assessment to clear their gates.
+
+A MOONSHOT position uses a wider catastrophic stop and does not use the normal 12% take-profit. Instead it runs an exit ladder:
+
+| Price multiple vs. entry | Portion of the *remaining* position sold |
+|---:|---:|
+| 2× | 20% |
+| 5× | 15% |
+| 10× | 15% |
+| 25× | 10% |
+| 100× | 100% of what remains |
+
+This is designed to recover capital along the way while keeping a runner for a very large move. The 100× stage is a target for position management; Tempest does not claim it can identify a token that will actually reach it.
+
+Robinhood's API supports market, limit, stop-loss, and stop-limit crypto orders. Tempest uses market orders for the initial implementation, preflights quantities using the pair's increment/max-size metadata, and checks estimated execution credit before selling a partial position. citeturn542933search0turn542933search2
+
 ## Important limitation
 
 A $2 bankroll is suitable for testing the software, not for assuming a meaningful or stable trading edge. The bot is designed to say **no trade** frequently when transaction friction, minimum order size, uncertainty, or risk limits make an entry unsuitable.
