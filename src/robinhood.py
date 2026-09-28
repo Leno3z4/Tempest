@@ -67,7 +67,8 @@ class RobinhoodCrypto:
         path = "/api/v2/crypto/trading/trading_pairs/" + _encode_params({"symbol": symbols} if symbols else None)
         results = []
         while path:
-            data = self.request("GET", path); results.extend(data.get("results", []))
+            data = self.request("GET", path)
+            results.extend(data.get("results", []))
             nxt = data.get("next"); path = nxt.replace(self.BASE_URL, "") if nxt else ""
         return results
 
@@ -84,6 +85,8 @@ class RobinhoodCrypto:
         return {r["symbol"]: {"bid": float(r["bid"]), "ask": float(r["ask"])} for r in data.get("results", []) if r.get("bid") is not None and r.get("ask") is not None}
 
     def estimated_price(self, symbol: str, side: str, quantity: float) -> dict[str, Any]:
+        if quantity <= 0:
+            raise RobinhoodAPIError("estimated price quantity must be positive")
         data = self.request("GET", "/api/v2/crypto/trading/estimated_price/" + _encode_params({"symbol": symbol, "side": side, "quantity": str(quantity)}))
         rows = data.get("results", [])
         if not rows: raise RobinhoodAPIError(f"No estimated price for {symbol}")
@@ -95,15 +98,15 @@ class RobinhoodCrypto:
         return self.request("POST", "/api/v2/crypto/trading/orders/" + _encode_params({"account_number": account_number}), body)
 
     def place_market_order(self, *, account_number: str, symbol: str, side: str, asset_quantity: float) -> dict[str, Any]:
-        return self.place_order(account_number=account_number,symbol=symbol,side=side,order_type="market",
+        return self.place_order(account_number=account_number, symbol=symbol, side=side, order_type="market",
                                 order_config={"asset_quantity":str(asset_quantity)})
 
     def place_market_buy_quote(self, *, account_number: str, symbol: str, quote_amount: float) -> dict[str, Any]:
-        return self.place_order(account_number=account_number,symbol=symbol,side="buy",order_type="market",
+        return self.place_order(account_number=account_number, symbol=symbol, side="buy", order_type="market",
                                 order_config={"quote_amount":str(quote_amount)})
 
     def place_stop_loss_sell(self, *, account_number: str, symbol: str, asset_quantity: float, stop_price: float) -> dict[str, Any]:
-        return self.place_order(account_number=account_number,symbol=symbol,side="sell",order_type="stop_loss",
+        return self.place_order(account_number=account_number, symbol=symbol, side="sell", order_type="stop_loss",
                                 order_config={"asset_quantity":str(asset_quantity),"stop_price":str(stop_price),"time_in_force":"gtc"})
 
     def cancel_order(self, order_id: str) -> dict[str, Any]:
